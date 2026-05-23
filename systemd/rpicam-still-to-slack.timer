@@ -1,0 +1,11 @@
+[Unit]
+Description=Run rpicam-still-to-slack every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+AccuracySec=30s
+Unit=rpicam-still-to-slack.service
+
+[Install]
+WantedBy=timers.target
