@@ -19,6 +19,8 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 BASE_DIR = Path(__file__).resolve().parent
+SECRET_OPTION_NAMES = {"SLACK_TOKEN", "SLACK_BOT_TOKEN"}
+TRUE_VALUES = {"1", "true", "yes", "on", "enable", "enabled"}
 
 
 def read_option_file(path: Path) -> dict[str, str]:
@@ -39,6 +41,10 @@ def read_option_file(path: Path) -> dict[str, str]:
     return values
 
 
+def truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in TRUE_VALUES
+
+
 def pick(options: dict[str, str], *names: str, default: str | None = None) -> str:
     for name in names:
         value = options.get(name)
@@ -51,6 +57,13 @@ def pick(options: dict[str, str], *names: str, default: str | None = None) -> st
 
 def num(options: dict[str, str], name: str, default: float) -> float:
     return float(options.get(name, default))
+
+
+def safe_options(options: dict[str, str]) -> dict[str, str]:
+    safe: dict[str, str] = {}
+    for key, value in sorted(options.items()):
+        safe[key] = "********" if key in SECRET_OPTION_NAMES else value
+    return safe
 
 
 def run(command: list[str], dry_run: bool) -> None:
@@ -156,14 +169,16 @@ def capture_final(options: dict[str, str], output: Path, profile: str, dry_run: 
     run(command, dry_run)
 
 
-def upload(options: dict[str, str], output: Path, profile: str, dry_run: bool) -> None:
-    token = pick(options, "SLACK_BOT_TOKEN", "SLACK_TOKEN")
-    channel = pick(options, "SLACK_CHANNEL_ID", "CHANNEL")
+def upload(options: dict[str, str], output: Path, profile: str, dry_run: bool, no_upload: bool) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     comment = pick(options, "COMMENT_TEMPLATE", default="Photo taken at {timestamp}! profile={profile}").format(timestamp=timestamp, profile=profile)
     logging.info("Slack comment: %s", comment)
-    if dry_run:
+    if dry_run or no_upload:
+        logging.info("Slack upload skipped")
         return
+
+    token = pick(options, "SLACK_BOT_TOKEN", "SLACK_TOKEN")
+    channel = pick(options, "SLACK_CHANNEL_ID", "CHANNEL")
     if not output.exists():
         raise RuntimeError(f"output image not found: {output}")
     try:
@@ -190,29 +205,45 @@ def main() -> int:
     parser.add_argument("--slack-option", type=Path, default=BASE_DIR / ".slack_option")
     parser.add_argument("--camera-option", type=Path, default=BASE_DIR / ".camera_option")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-upload", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--keep-preview", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
-    logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO), format="%(asctime)s %(levelname)s %(message)s")
-
     try:
         options = read_option_file(args.slack_option) | read_option_file(args.camera_option)
+        debug = args.debug or truthy(options.get("DEBUG")) or truthy(options.get("DEBUG_MODE"))
+        no_upload = args.no_upload or truthy(options.get("NO_UPLOAD")) or truthy(options.get("DEBUG_NO_UPLOAD"))
+        log_level = "DEBUG" if debug else args.log_level.upper()
+
+        logging.basicConfig(level=getattr(logging, log_level, logging.INFO), format="%(asctime)s %(levelname)s %(message)s")
+        if debug:
+            logging.debug("debug mode enabled")
+            logging.debug("options: %s", json.dumps(safe_options(options), ensure_ascii=False, sort_keys=True))
+
         output = Path(pick(options, "OUTPUT_PATH", default="/tmp/image.jpg"))
         preview = Path(pick(options, "PREVIEW_PATH", default="/tmp/rpicam-still-to-slack-preview.jpg"))
-        metadata = Path(pick(options, "METADATA_PATH", default="/tmp/rpicam-still-to-slack-preview.json"))
+        metadata_path = Path(pick(options, "METADATA_PATH", default="/tmp/rpicam-still-to-slack-preview.json"))
         lock_path = Path(pick(options, "LOCK_PATH", default="/tmp/rpicam-still-to-slack.lock"))
 
         with lock(lock_path):
-            capture_preview(options, preview, metadata, args.dry_run)
-            profile = classify(load_metadata(metadata), options)
+            capture_preview(options, preview, metadata_path, args.dry_run)
+            metadata = load_metadata(metadata_path)
+            if debug:
+                logging.debug("metadata file: %s", metadata_path)
+                logging.debug("metadata: %s", json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True))
+            profile = classify(metadata, options)
             logging.info("selected profile: %s", profile)
             capture_final(options, output, profile, args.dry_run)
-            upload(options, output, profile, args.dry_run)
-            if not args.keep_preview:
-                for path in (preview, metadata):
+            upload(options, output, profile, args.dry_run, no_upload)
+            if not (args.keep_preview or debug):
+                for path in (preview, metadata_path):
                     with contextlib.suppress(FileNotFoundError):
                         path.unlink()
+            elif debug:
+                logging.debug("preview kept: %s", preview)
+                logging.debug("metadata kept: %s", metadata_path)
         return 0
     except Exception as exc:
         logging.error("%s", exc)
