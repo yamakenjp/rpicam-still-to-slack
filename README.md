@@ -2,10 +2,13 @@
 
 Raspberry Pi Zero 2 W と Raspberry Pi Camera Module 3 で屋外を撮影し、Slack に投稿するためのスクリプトです。
 
+このリポジトリは Raspberry Pi OS Trixie への移行後の環境に固定します。Bookworm / Bullseye 互換は考慮しません。
+
 常駐プロセスではなく、cron または systemd timer から 15 分に 1 回実行する前提です。
 
 ## 方針
 
+- 対象 OS は Raspberry Pi OS Trixie に固定する
 - 撮影は `rpicam-still` に任せる
 - 制御と Slack 投稿は Python 3 で行う
 - HDR は常時有効化する
@@ -18,16 +21,32 @@ Raspberry Pi Zero 2 W と Raspberry Pi Camera Module 3 で屋外を撮影し、S
 - Raspberry Pi Zero 2 W
 - Raspberry Pi Camera Module 3
 - Raspberry Pi Zero 用カメラケーブル
-- Raspberry Pi OS Bookworm 以降推奨
+- Raspberry Pi OS Trixie Lite
 - `rpicam-still` が使える環境
 - Slack Bot Token
 - 投稿先チャンネル ID
+
+## OS 前提
+
+このスクリプトは Raspberry Pi OS Trixie Lite で動かす前提です。
+
+Bookworm からのインプレースアップグレードではなく、Trixie Lite の新規インストール後にセットアップする方針にします。
+
+Trixie 化後、まず以下を確認します。
+
+```sh
+cat /etc/os-release
+python3 --version
+rpicam-still --version
+```
+
+`/etc/os-release` で `VERSION_CODENAME=trixie` を確認してください。
 
 ## セットアップ
 
 ```sh
 sudo apt update
-sudo apt install -y python3-venv python3-pip rpicam-apps
+sudo apt install -y python3-venv python3-pip
 
 git clone https://github.com/yamakenjp/rpicam-still-to-slack.git
 cd rpicam-still-to-slack
@@ -43,19 +62,21 @@ cp .camera_option.sample .camera_option
 vim .camera_option
 ```
 
+Raspberry Pi OS には `rpicam-apps` が含まれるため、通常は `rpicam-still` を追加ビルドしません。`rpicam-still --version` が通らない場合だけ OS / camera stack 側を確認します。
+
 ## Slack 設定
 
 `.slack_option` を作成します。
 
 ```sh
-SLACK_TOKEN=xoxb-your-slack-bot-token
+SLACK_TOKEN=replace-with-your-slack-bot-token
 CHANNEL=C0123456789
 ```
 
 以下の名前も読めます。
 
 ```sh
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_BOT_TOKEN=replace-with-your-slack-bot-token
 SLACK_CHANNEL_ID=C0123456789
 ```
 
