@@ -1,0 +1,9 @@
+# Slack bot token
+SLACK_TOKEN=replace-with-your-slack-bot-token
+
+# Slack channel ID, for example C0123456789
+CHANNEL=C0123456789
+
+# Alternative names are also supported.
+# SLACK_BOT_TOKEN=replace-with-your-slack-bot-token
+# SLACK_CHANNEL_ID=C0123456789
