@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.slack_option
+.camera_option
+.DS_Store
