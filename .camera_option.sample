@@ -1,0 +1,7 @@
+OUTPUT_PATH=/tmp/image.jpg
+WIDTH=2304
+HEIGHT=1296
+QUALITY=92
+HDR_MODE=auto
+AUTOFOCUS_MODE=continuous
+METERING=average
