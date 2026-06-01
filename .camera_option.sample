@@ -11,3 +11,16 @@ EXIFTOOL=exiftool
 EXIF_METADATA_REQUIRED=0
 DEBUG=0
 DEBUG_NO_UPLOAD=0
+
+# Fixed focus. When set, normal capture uses this value and skips focus pre-captures.
+# LENS_POSITION=3.8
+
+# Focus pre-capture tuning used when LENS_POSITION is not set.
+FOCUS_PRECAPTURE_COUNT=3
+
+# Focus calibration mode options. Used only with --focus-calibration.
+# FOCUS_SCAN_VALUES=3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3,4.4,4.5
+FOCUS_SCAN_START=0.0
+FOCUS_SCAN_END=8.0
+FOCUS_SCAN_STEP=0.5
+FOCUS_CALIBRATION_DIR=/tmp/rpicam-still-to-slack-focus
