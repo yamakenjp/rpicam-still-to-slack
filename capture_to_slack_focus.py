@@ -122,6 +122,50 @@ def configured_lens_position(options: dict[str, str]) -> float | None:
     return opt_float(options, "LENS_POSITION", "lens-position", "LENS-POSITION")
 
 
+def clamp(value: float, lower: float, upper: float) -> float:
+    if upper < lower:
+        lower, upper = upper, lower
+    return max(lower, min(upper, value))
+
+
+def round_to_step(value: float, step: float) -> int:
+    if step <= 0:
+        return int(round(value))
+    return int(round(value / step) * step)
+
+
+def adaptive_shutter_enabled(options: dict[str, str]) -> bool:
+    return truthy(pick(options, "AUTO_SHUTTER", default="1"))
+
+
+def estimate_adaptive_shutter_us(metadata: dict, options: dict[str, str]) -> int | None:
+    if not adaptive_shutter_enabled(options):
+        return None
+
+    lux = metadata_number(metadata, "Lux")
+    if lux is None or lux <= 0:
+        logging.warning("adaptive shutter disabled for this capture because preview Lux is unavailable")
+        return None
+
+    fallback_reference_us = num(options, "NIGHT_SHUTTER_US", 4_000_000)
+    reference_us = num(options, "AUTO_SHUTTER_REFERENCE_US", fallback_reference_us)
+    reference_lux = num(options, "AUTO_SHUTTER_REFERENCE_LUX", 1.0)
+    min_us = num(options, "AUTO_SHUTTER_MIN_US", 50_000)
+    max_us = num(options, "AUTO_SHUTTER_MAX_US", max(reference_us, fallback_reference_us))
+    step_us = num(options, "AUTO_SHUTTER_STEP_US", 1_000)
+
+    estimated = reference_us * reference_lux / lux
+    clamped = clamp(estimated, min_us, max_us)
+    rounded = round_to_step(clamped, step_us)
+    rounded = int(clamp(rounded, min_us, max_us))
+
+    logging.info(
+        "adaptive shutter preview_lux=%s reference_us=%s reference_lux=%s estimated_us=%.1f selected_us=%s",
+        lux, reference_us, reference_lux, estimated, rounded,
+    )
+    return rounded
+
+
 def classify(metadata: dict, options: dict[str, str]) -> str:
     exposure = metadata_number(metadata, "ExposureTime", "SensorExposureTime", "FrameDuration")
     gain = metadata_number(metadata, "AnalogueGain", "DigitalGain")
@@ -138,6 +182,26 @@ def classify(metadata: dict, options: dict[str, str]) -> str:
     return "twilight"
 
 
+def classify_adaptive_shutter(shutter_us: int, options: dict[str, str]) -> str:
+    if shutter_us <= num(options, "AUTO_SHUTTER_DAY_MAX_US", 100_000):
+        return "day"
+    if shutter_us <= num(options, "AUTO_SHUTTER_TWILIGHT_MAX_US", 1_000_000):
+        return "twilight"
+    return "night"
+
+
+def select_capture_plan(metadata: dict, options: dict[str, str]) -> tuple[str, int | None]:
+    shutter_us = estimate_adaptive_shutter_us(metadata, options)
+    if shutter_us is not None:
+        profile = classify_adaptive_shutter(shutter_us, options)
+        logging.info("selected profile: %s by adaptive shutter", profile)
+        return profile, shutter_us
+
+    profile = classify(metadata, options)
+    logging.info("selected profile: %s by legacy classifier", profile)
+    return profile, None
+
+
 def base_args(options: dict[str, str], lens_position: float | None = None) -> list[str]:
     args = [pick(options, "RPICAM_STILL", default="rpicam-still"), "--nopreview", "--hdr", pick(options, "HDR_MODE", default="auto")]
     if lens_position is None:
@@ -148,16 +212,29 @@ def base_args(options: dict[str, str], lens_position: float | None = None) -> li
     return args
 
 
-def profile_args(profile: str, options: dict[str, str]) -> list[str]:
+def fixed_profile_shutter_us(profile: str, options: dict[str, str]) -> int | None:
+    value = int(num(options, f"{profile.upper()}_SHUTTER_US", 0))
+    if value > 0:
+        return value
+    return None
+
+
+def append_shutter_arg(args: list[str], shutter_us: int | None) -> list[str]:
+    if shutter_us is not None and shutter_us > 0:
+        args += ["--shutter", str(int(shutter_us))]
+    return args
+
+
+def profile_args(profile: str, options: dict[str, str], shutter_us: int | None = None) -> list[str]:
+    selected_shutter = shutter_us if shutter_us is not None else fixed_profile_shutter_us(profile, options)
     if profile == "day":
-        return ["--ev", pick(options, "DAY_EV", default="-0.3"), "--exposure", pick(options, "DAY_EXPOSURE", default="normal"), "--denoise", pick(options, "DAY_DENOISE", default="cdn_fast")]
+        args = ["--ev", pick(options, "DAY_EV", default="-0.3"), "--exposure", pick(options, "DAY_EXPOSURE", default="normal"), "--denoise", pick(options, "DAY_DENOISE", default="cdn_fast")]
+        return append_shutter_arg(args, selected_shutter)
     if profile == "night":
         args = ["--ev", pick(options, "NIGHT_EV", default="0.7"), "--exposure", pick(options, "NIGHT_EXPOSURE", default="long"), "--denoise", pick(options, "NIGHT_DENOISE", default="cdn_hq")]
-        shutter = int(num(options, "NIGHT_SHUTTER_US", 0))
-        if shutter > 0:
-            args += ["--shutter", str(shutter)]
-        return args
-    return ["--ev", pick(options, "TWILIGHT_EV", default="0"), "--exposure", pick(options, "TWILIGHT_EXPOSURE", default="normal"), "--denoise", pick(options, "TWILIGHT_DENOISE", default="cdn_fast")]
+        return append_shutter_arg(args, selected_shutter)
+    args = ["--ev", pick(options, "TWILIGHT_EV", default="0"), "--exposure", pick(options, "TWILIGHT_EXPOSURE", default="normal"), "--denoise", pick(options, "TWILIGHT_DENOISE", default="cdn_fast")]
+    return append_shutter_arg(args, selected_shutter)
 
 
 def capture_still(options: dict[str, str], output: Path, metadata: Path, width: str, height: str, quality: str, timeout: str, dry_run: bool, lens_position: float | None = None, extra_args: list[str] | None = None) -> None:
@@ -210,11 +287,11 @@ def refine_focus_with_precaptures(options: dict[str, str], preview: Path, metada
     return best_lens, best_meta
 
 
-def capture_final(options: dict[str, str], output: Path, metadata: Path, profile: str, lens_position: float | None, dry_run: bool) -> None:
+def capture_final(options: dict[str, str], output: Path, metadata: Path, profile: str, lens_position: float | None, dry_run: bool, shutter_us: int | None = None) -> None:
     capture_still(
         options, output, metadata,
         pick(options, "WIDTH", default="2304"), pick(options, "HEIGHT", default="1296"), pick(options, "QUALITY", default="92"), pick(options, "TIMEOUT_MS", default="3000"),
-        dry_run, lens_position=lens_position, extra_args=profile_args(profile, options),
+        dry_run, lens_position=lens_position, extra_args=profile_args(profile, options, shutter_us=shutter_us),
     )
 
 
@@ -351,9 +428,11 @@ def main() -> int:
             else:
                 final_lens, preview_meta = refine_focus_with_precaptures(options, preview, preview_metadata, args.dry_run, debug)
             log_metadata("preview", preview_metadata, preview_meta, debug)
-            profile = classify(preview_meta, options)
+            profile, shutter_us = select_capture_plan(preview_meta, options)
             logging.info("selected profile: %s", profile)
-            capture_final(options, output, final_metadata, profile, final_lens, args.dry_run)
+            if shutter_us is not None:
+                logging.info("selected shutter_us: %s", shutter_us)
+            capture_final(options, output, final_metadata, profile, final_lens, args.dry_run, shutter_us=shutter_us)
             final_meta = load_metadata(final_metadata)
             log_metadata("final", final_metadata, final_meta, debug)
             embed_metadata(options, output, final_metadata, profile, args.dry_run)
