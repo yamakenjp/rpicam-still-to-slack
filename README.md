@@ -46,7 +46,7 @@ rpicam-still --version
 
 ```sh
 sudo apt update
-sudo apt install -y python3-venv python3-pip
+sudo apt install -y python3-venv python3-pip libimage-exiftool-perl
 
 git clone https://github.com/yamakenjp/rpicam-still-to-slack.git
 cd rpicam-still-to-slack
@@ -81,6 +81,28 @@ SLACK_CHANNEL_ID=C0123456789
 ```
 
 Bot には少なくとも投稿先チャンネルへの参加と、ファイルアップロードに必要な権限が必要です。
+
+## カメラ設定
+
+`.camera_option` を作成します。
+
+主な設定です。
+
+```sh
+OUTPUT_PATH=/tmp/image.jpg
+FINAL_METADATA_PATH=/tmp/rpicam-still-to-slack-final.json
+EMBED_EXIF_METADATA=1
+EXIFTOOL=exiftool
+EXIF_METADATA_REQUIRED=0
+```
+
+`FINAL_METADATA_PATH` は本撮影の `rpicam-still --metadata` 出力先です。省略時は `/tmp/rpicam-still-to-slack-final.json` を使います。
+
+`EMBED_EXIF_METADATA=1` の場合、本撮影後かつ Slack 投稿前に `embed_metadata.py` を実行し、本撮影メタデータを JPEG の EXIF に書き込みます。無効化する場合は `EMBED_EXIF_METADATA=0` を指定します。
+
+`EXIFTOOL` は `embed_metadata.py` が使う ExifTool コマンドです。省略時は `exiftool` を使います。
+
+`EXIF_METADATA_REQUIRED=1` の場合、EXIF 書き込み失敗を致命的エラーとして扱い、Slack 投稿に進みません。省略時や `0` では警告にして撮影処理を継続します。
 
 ## 手動実行
 
@@ -119,7 +141,8 @@ DEBUG=1
 - 読み込んだ設定をログに出す
 - Slack token はマスクして出す
 - 事前撮影の JSON メタデータをログに出す
-- 事前撮影画像とメタデータファイルを削除せず保持する
+- 本撮影の JSON メタデータをログに出す
+- 事前撮影画像、事前撮影メタデータ、本撮影メタデータを削除せず保持する
 
 撮影は行うが Slack には投稿しない場合は、以下を使います。
 
@@ -164,8 +187,10 @@ journalctl -u rpicam-still-to-slack.service -n 100 --no-pager
 3. `rpicam-still` の JSON メタデータを読む
 4. `day` / `twilight` / `night` のプロファイルを決める
 5. HDR 有効のまま本撮影を行う
-6. Slack に投稿する
-7. 一時ファイルを整理する
+6. 本撮影の JSON メタデータを読む
+7. 必要に応じて本撮影メタデータを JPEG の EXIF に書き込む
+8. Slack に投稿する
+9. 一時ファイルを整理する
 
 ## 注意
 
