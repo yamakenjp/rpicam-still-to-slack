@@ -104,6 +104,93 @@ EXIF_METADATA_REQUIRED=0
 
 `EXIF_METADATA_REQUIRED=1` の場合、EXIF 書き込み失敗を致命的エラーとして扱い、Slack 投稿に進みません。省略時や `0` では警告にして撮影処理を継続します。
 
+## フォーカス調整
+
+Camera Module 3 のピントは `lens-position` で固定できます。このスクリプトでは、`.camera_option` に `LENS_POSITION` がある場合、その値を優先して通常撮影します。
+
+```sh
+LENS_POSITION=3.8
+```
+
+`LENS_POSITION` が設定されている場合、通常撮影ではフォーカス追い込み用の複数事前撮影を行いません。事前撮影と本撮影の両方で `--autofocus-mode manual --lens-position <LENS_POSITION>` を使います。
+
+設定例です。
+
+```sh
+LENS_POSITION=3.8
+```
+
+通常撮影のログに以下が出れば、固定フォーカスが使われています。
+
+```text
+using configured LENS_POSITION=3.8; focus pre-captures are skipped
+```
+
+本撮影コマンドには以下が含まれます。
+
+```text
+--autofocus-mode manual --lens-position 3.800000
+```
+
+`LENS_POSITION` が未設定の場合、通常撮影では事前撮影を複数回行い、各回の `FocusFoM` と `LensPosition` を比較します。その中で `FocusFoM` が最大の `LensPosition` を本撮影に使います。
+
+事前撮影回数は以下で指定できます。
+
+```sh
+FOCUS_PRECAPTURE_COUNT=3
+```
+
+### フォーカスキャリブレーションモード
+
+`--focus-calibration` を使うと、複数の `lens-position` 値で撮影し、`FocusFoM` が最も高い値を推奨値として出力します。Slack には投稿しません。
+
+```sh
+./capture_to_slack.py --focus-calibration --debug --no-upload
+```
+
+標準では `0.0` から `8.0` まで `0.5` 刻みでスキャンします。
+
+```sh
+FOCUS_SCAN_START=0.0
+FOCUS_SCAN_END=8.0
+FOCUS_SCAN_STEP=0.5
+```
+
+範囲を細かく指定したい場合は `FOCUS_SCAN_VALUES` を使います。
+
+```sh
+FOCUS_SCAN_VALUES=3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3,4.4,4.5
+```
+
+出力例です。
+
+```text
+recommended LENS_POSITION=3.8 focus_fom=3816.0
+LENS_POSITION=3.8
+FOCUS_FOM=3816.0
+FOCUS_CALIBRATION_REPORT=/tmp/rpicam-still-to-slack-focus/results.csv
+```
+
+推奨値が決まったら、`.camera_option` に `LENS_POSITION=<value>` を設定します。調整に使った `FOCUS_SCAN_VALUES` は通常運用では削除して構いません。
+
+```sh
+LENS_POSITION=3.8
+```
+
+キャリブレーション結果の画像と JSON は以下に保存されます。
+
+```sh
+/tmp/rpicam-still-to-slack-focus/
+```
+
+CSV レポートは以下です。
+
+```sh
+/tmp/rpicam-still-to-slack-focus/results.csv
+```
+
+最終判断では、キャリブレーション時の `FocusFoM` だけでなく、通常撮影後の本撮影メタデータの `FocusFoM` と実画像の見た目も確認してください。夜間では露光時間やノイズにより `FocusFoM` が揺らぎます。
+
 ## 手動実行
 
 まず dry-run で撮影コマンドだけ確認します。
@@ -183,14 +270,16 @@ journalctl -u rpicam-still-to-slack.service -n 100 --no-pager
 ## 撮影フロー
 
 1. ロックファイルを取得する
-2. 事前撮影を行う
-3. `rpicam-still` の JSON メタデータを読む
-4. `day` / `twilight` / `night` のプロファイルを決める
-5. HDR 有効のまま本撮影を行う
-6. 本撮影の JSON メタデータを読む
-7. 必要に応じて本撮影メタデータを JPEG の EXIF に書き込む
-8. Slack に投稿する
-9. 一時ファイルを整理する
+2. `LENS_POSITION` の有無を確認する
+3. `LENS_POSITION` がある場合は固定フォーカスで事前撮影する
+4. `LENS_POSITION` がない場合は複数回の事前撮影で `FocusFoM` が最大の `LensPosition` を選ぶ
+5. `rpicam-still` の JSON メタデータを読む
+6. `day` / `twilight` / `night` のプロファイルを決める
+7. HDR 有効のまま本撮影を行う
+8. 本撮影の JSON メタデータを読む
+9. 必要に応じて本撮影メタデータを JPEG の EXIF に書き込む
+10. Slack に投稿する
+11. 一時ファイルを整理する
 
 ## 注意
 
