@@ -5,7 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/pi/rpicam-still-to-slack
-ExecStart=/home/pi/rpicam-still-to-slack/.venv/bin/python /home/pi/rpicam-still-to-slack/capture_to_slack.py
 User=pi
 Group=pi
+WorkingDirectory=/home/pi/rpicam-still-to-slack
+ExecStart=/home/pi/rpicam-still-to-slack/.venv/bin/python /home/pi/rpicam-still-to-slack/capture_to_slack.py
+UMask=0077
+TimeoutStartSec=120s
