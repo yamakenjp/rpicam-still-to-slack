@@ -76,6 +76,18 @@ class ExposurePlanTests(unittest.TestCase):
             ("night", 250_000),
         )
 
+    def test_explicit_night_shutter_overrides_adaptive_estimate(self) -> None:
+        metadata = {
+            "ExposureTime": 66_541,
+            "AnalogueGain": 7.876923,
+            "DigitalGain": 1.008,
+        }
+        options = dict(self.OPTIONS, NIGHT_SHUTTER_US="4000000")
+        self.assertEqual(
+            app.select_capture_plan(metadata, options),
+            ("night", 4_000_000),
+        )
+
     def test_adaptive_shutter_does_not_shorten_low_gain_exposure(self) -> None:
         metadata = {
             "ExposureTime": 50_000,
@@ -94,7 +106,7 @@ class ExposurePlanTests(unittest.TestCase):
             ("night", None),
         )
 
-    def test_night_fixed_shutter_is_a_fallback(self) -> None:
+    def test_profile_args_uses_fixed_shutter_without_planned_value(self) -> None:
         options = dict(self.OPTIONS, NIGHT_SHUTTER_US="4000000")
         args = app.profile_args("night", options, shutter_us=None)
         self.assertEqual(args[-2:], ["--shutter", "4000000"])

@@ -139,7 +139,7 @@ EXPOSURE_NIGHT_MIN_US=10000
 GAIN_NIGHT_MIN=4.0
 ```
 
-`DAY_SHUTTER_US`、`TWILIGHT_SHUTTER_US`、`NIGHT_SHUTTER_US` に正の値を指定すると、そのプロファイルで明示的な固定シャッターとして使います。初期値はすべて `0` です。`NIGHT_SHUTTER_US` は夜間の自動推定に必要なメタデータが得られなかった場合のフォールバックにもなります。
+`DAY_SHUTTER_US`、`TWILIGHT_SHUTTER_US`、`NIGHT_SHUTTER_US` に正の値を指定すると、そのプロファイルの自動推定より優先して固定シャッターとして使います。初期値はすべて `0` です。自動推定を使うプロファイルでは `0` にしてください。例えば、夜景を4秒露光へ固定する場合は `NIGHT_SHUTTER_US=4000000` とします。
 
 ### 旧設定からの移行
 
@@ -150,7 +150,7 @@ Lux 基準だった以下の設定は廃止され、指定されていても無�
 - `AUTO_SHUTTER_DAY_MAX_US`
 - `AUTO_SHUTTER_TWILIGHT_MAX_US`
 
-既存の `.camera_option` から上記を削除し、`AUTO_SHUTTER_PROFILES=night` と `AUTO_SHUTTER_TARGET_GAIN=2.0` を追加してください。`AUTO_SHUTTER_MIN_US` は `50000` から `1000` へ変更します。従来の `NIGHT_SHUTTER_US=4000000` を固定値として残す必要がなければ、`NIGHT_SHUTTER_US=0` に変更します。
+既存の `.camera_option` から上記を削除し、`AUTO_SHUTTER_PROFILES=night` と `AUTO_SHUTTER_TARGET_GAIN=2.0` を追加してください。`AUTO_SHUTTER_MIN_US` は `50000` から `1000` へ変更します。従来どおり夜景を4秒露光にする場合は `NIGHT_SHUTTER_US=4000000` を残し、適応シャッターへ切り替える場合だけ `NIGHT_SHUTTER_US=0` に変更します。
 
 ## フォーカス調整
 

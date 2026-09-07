@@ -319,13 +319,19 @@ def select_capture_plan(
     options: dict[str, str],
 ) -> tuple[str, int | None]:
     profile = classify(metadata, options)
-    shutter_us = None
-    if (
+    shutter_us = fixed_profile_shutter_us(profile, options)
+    if shutter_us is not None:
+        source = "fixed profile shutter"
+    elif (
         adaptive_shutter_enabled(options)
         and profile in auto_shutter_profiles(options)
     ):
         shutter_us = estimate_adaptive_shutter_us(metadata, options)
-    source = "adaptive shutter" if shutter_us is not None else "preview classifier"
+        source = (
+            "adaptive shutter" if shutter_us is not None else "preview classifier"
+        )
+    else:
+        source = "preview classifier"
     logging.info("selected profile=%s source=%s", profile, source)
     return profile, shutter_us
 
