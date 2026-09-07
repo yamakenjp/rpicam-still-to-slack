@@ -47,6 +47,8 @@ EXPOSURE_DAY_MAX_US=2000
 GAIN_DAY_MAX=2.0
 EXPOSURE_NIGHT_MIN_US=10000
 GAIN_NIGHT_MIN=4.0
+LUX_NIGHT_MAX=2.0
+LUX_DAY_MIN=100.0
 
 # Fixed focus. When set, normal capture uses this value and skips focus pre-captures.
 # lens-position is in diopters: 0.0 is infinity and 2.0 is approximately 0.5 m.

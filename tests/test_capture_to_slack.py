@@ -34,6 +34,8 @@ class ExposurePlanTests(unittest.TestCase):
         "GAIN_DAY_MAX": "2.0",
         "EXPOSURE_NIGHT_MIN_US": "10000",
         "GAIN_NIGHT_MIN": "4.0",
+        "LUX_NIGHT_MAX": "2.0",
+        "LUX_DAY_MIN": "100.0",
         "AUTO_SHUTTER": "1",
         "AUTO_SHUTTER_PROFILES": "night",
         "AUTO_SHUTTER_TARGET_GAIN": "2.0",
@@ -65,6 +67,32 @@ class ExposurePlanTests(unittest.TestCase):
             ("twilight", None),
         )
 
+    def test_high_lux_vetoes_night_metadata_from_hdr_preview(self) -> None:
+        metadata = {
+            "ExposureTime": 66_541,
+            "AnalogueGain": 7.876923,
+            "DigitalGain": 1.005216,
+            "Lux": 22.366419,
+        }
+        options = dict(self.OPTIONS, NIGHT_SHUTTER_US="4000000")
+        self.assertEqual(
+            app.select_capture_plan(metadata, options),
+            ("twilight", None),
+        )
+
+    def test_day_lux_overrides_high_exposure_and_gain(self) -> None:
+        metadata = {
+            "ExposureTime": 66_541,
+            "AnalogueGain": 7.876923,
+            "DigitalGain": 1.005216,
+            "Lux": 150.0,
+        }
+        options = dict(self.OPTIONS, NIGHT_SHUTTER_US="4000000")
+        self.assertEqual(
+            app.select_capture_plan(metadata, options),
+            ("day", None),
+        )
+
     def test_night_shutter_uses_exposure_and_total_gain(self) -> None:
         metadata = {
             "ExposureTime": 50_000,
@@ -81,6 +109,7 @@ class ExposurePlanTests(unittest.TestCase):
             "ExposureTime": 66_541,
             "AnalogueGain": 7.876923,
             "DigitalGain": 1.008,
+            "Lux": 0.65,
         }
         options = dict(self.OPTIONS, NIGHT_SHUTTER_US="4000000")
         self.assertEqual(
@@ -130,6 +159,13 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "at least 1.0"):
             app.validate_options(
                 {"AUTO_SHUTTER_TARGET_GAIN": "0.5"},
+                focus_calibration_mode=False,
+            )
+
+    def test_reversed_lux_thresholds_are_rejected(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "lux thresholds"):
+            app.validate_options(
+                {"LUX_NIGHT_MAX": "100", "LUX_DAY_MIN": "2"},
                 focus_calibration_mode=False,
             )
 

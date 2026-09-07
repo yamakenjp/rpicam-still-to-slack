@@ -109,7 +109,7 @@ EXIF_METADATA_REQUIRED=0
 
 ## 露出制御
 
-事前撮影の `ExposureTime` と、`AnalogueGain * DigitalGain` で求めた総ゲインから `day` / `twilight` / `night` を判定します。`FrameDuration` は露光時間ではないため判定には使いません。
+事前撮影の `ExposureTime` と、`AnalogueGain * DigitalGain` で求めた総ゲインから `day` / `twilight` / `night` を判定します。さらに `Lux` 推定値を安全弁として使い、明け方や日中に長い夜間シャッターを適用しません。`FrameDuration` は露光時間ではないため判定には使いません。
 
 初期値では自動シャッターを `night` にだけ適用します。昼間と薄暮では `--shutter` を指定せず、`rpicam-still` の AE に任せます。
 
@@ -137,7 +137,11 @@ EXPOSURE_DAY_MAX_US=2000
 GAIN_DAY_MAX=2.0
 EXPOSURE_NIGHT_MIN_US=10000
 GAIN_NIGHT_MIN=4.0
+LUX_NIGHT_MAX=2.0
+LUX_DAY_MIN=100.0
 ```
+
+`Lux` が得られた場合、`LUX_NIGHT_MAX` 以下だけを夜間候補、`LUX_NIGHT_MAX` より大きく `LUX_DAY_MIN` 未満を薄暮、`LUX_DAY_MIN` 以上を昼間として扱います。これはLuxからシャッター時間を直接計算するものではなく、HDR事前撮影で露光時間とゲインが高いまま明るくなった場合の誤判定を防ぐための安全境界です。Luxが欠落した場合は露光時間と総ゲインだけで判定します。
 
 `DAY_SHUTTER_US`、`TWILIGHT_SHUTTER_US`、`NIGHT_SHUTTER_US` に正の値を指定すると、そのプロファイルの自動推定より優先して固定シャッターとして使います。初期値はすべて `0` です。自動推定を使うプロファイルでは `0` にしてください。例えば、夜景を4秒露光へ固定する場合は `NIGHT_SHUTTER_US=4000000` とします。
 

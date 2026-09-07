@@ -293,11 +293,23 @@ def estimate_adaptive_shutter_us(
 def classify(metadata: dict[str, Any], options: dict[str, str]) -> str:
     exposure = metadata_exposure_us(metadata)
     gain = metadata_total_gain(metadata)
+    lux = metadata_number(metadata, "Lux")
     logging.info(
-        "classifying preview exposure_us=%s total_gain=%s",
+        "classifying preview exposure_us=%s total_gain=%s lux=%s",
         exposure,
         gain,
+        lux,
     )
+
+    # ExposureTime and gain can remain high in an IMX708 HDR preview even as
+    # dawn arrives. Use the AE lux estimate as a safety gate so a long fixed
+    # night shutter is never carried into twilight or daytime.
+    if lux is not None:
+        if lux >= num(options, "LUX_DAY_MIN", 100.0):
+            return "day"
+        if lux > num(options, "LUX_NIGHT_MAX", 2.0):
+            return "twilight"
+
     if exposure is None and gain is None:
         return "twilight"
     if exposure is not None and exposure <= num(
@@ -917,6 +929,12 @@ def validate_options(
     if day_gain <= 0 or night_gain <= day_gain:
         raise RuntimeError(
             "gain thresholds must satisfy 0 < GAIN_DAY_MAX < GAIN_NIGHT_MIN"
+        )
+    night_lux = num(options, "LUX_NIGHT_MAX", 2.0)
+    day_lux = num(options, "LUX_DAY_MIN", 100.0)
+    if night_lux < 0 or day_lux <= night_lux:
+        raise RuntimeError(
+            "lux thresholds must satisfy 0 <= LUX_NIGHT_MAX < LUX_DAY_MIN"
         )
 
     if adaptive_shutter_enabled(options):
