@@ -14,41 +14,52 @@ DEBUG_NO_UPLOAD=0
 
 PREVIEW_TIMEOUT_MS=4000
 TIMEOUT_MS=6000
+COMMAND_TIMEOUT_S=45
+EXIFTOOL_TIMEOUT_S=30
+SLACK_TIMEOUT_S=30
 
-# Adaptive shutter uses preview Lux to estimate the final shutter speed.
+# Adaptive shutter is applied only to the listed profiles. It estimates a
+# lower-noise shutter from preview ExposureTime and AnalogueGain*DigitalGain.
 AUTO_SHUTTER=1
-AUTO_SHUTTER_REFERENCE_US=4000000
-AUTO_SHUTTER_REFERENCE_LUX=1.0
-AUTO_SHUTTER_MIN_US=50000
+AUTO_SHUTTER_PROFILES=night
+AUTO_SHUTTER_TARGET_GAIN=2.0
+AUTO_SHUTTER_MIN_US=1000
 AUTO_SHUTTER_MAX_US=12000000
 AUTO_SHUTTER_STEP_US=1000
-AUTO_SHUTTER_DAY_MAX_US=100000
-AUTO_SHUTTER_TWILIGHT_MAX_US=1000000
 
 DAY_EV=-0.3
 DAY_EXPOSURE=normal
 DAY_DENOISE=cdn_fast
+DAY_SHUTTER_US=0
 
 TWILIGHT_EV=0
 TWILIGHT_EXPOSURE=normal
 TWILIGHT_DENOISE=cdn_fast
+TWILIGHT_SHUTTER_US=0
 
 NIGHT_EV=0.8
 NIGHT_EXPOSURE=long
 NIGHT_DENOISE=cdn_hq
-NIGHT_SHUTTER_US=4000000
+# A positive value overrides the adaptive estimate. Set 0 to use adaptation.
+NIGHT_SHUTTER_US=0
 
+EXPOSURE_DAY_MAX_US=2000
+GAIN_DAY_MAX=2.0
 EXPOSURE_NIGHT_MIN_US=10000
 GAIN_NIGHT_MIN=4.0
+LUX_NIGHT_MAX=2.0
+LUX_DAY_MIN=100.0
 
 # Fixed focus. When set, normal capture uses this value and skips focus pre-captures.
-# LENS_POSITION=3.8
+# lens-position is in diopters: 0.0 is infinity and 2.0 is approximately 0.5 m.
+# Calibrate this value for the actual scene instead of copying an example.
+# LENS_POSITION=0.0
 
 # Focus pre-capture tuning used when LENS_POSITION is not set.
 FOCUS_PRECAPTURE_COUNT=3
 
 # Focus calibration mode options. Used only with --focus-calibration.
-# FOCUS_SCAN_VALUES=3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3,4.4,4.5
+# FOCUS_SCAN_VALUES=0.0,0.1,0.2,0.3,0.4,0.5
 FOCUS_SCAN_START=0.0
 FOCUS_SCAN_END=8.0
 FOCUS_SCAN_STEP=0.5
